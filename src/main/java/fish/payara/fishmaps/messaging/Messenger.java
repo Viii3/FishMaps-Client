@@ -1,14 +1,13 @@
 package fish.payara.fishmaps.messaging;
 
 import com.google.gson.Gson;
-import fish.payara.fishmaps.FishMapsMain;
-import fish.payara.fishmaps.WorldUtil;
 import fish.payara.fishmaps.config.Settings;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
@@ -16,24 +15,29 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public abstract class Messenger {
-    private static final Queue<BlockData> CACHE = new LinkedList<>();
+    private static final Queue<BlockData> CACHE = new ConcurrentLinkedQueue<>();
     private static final Queue<CachedChunk> CHUNK_CACHE = new LinkedList<>();
 
     private static String blockPost = Settings.getAddress("/api/block");
     private static String playerPost = Settings.getAddress("/api/player");
 
     public static void updateAddresses () {
-        blockPost = Settings.getAddress("/api/block");
+        blockPost = Settings.getAddress("/api/map/block");
         playerPost = Settings.getAddress("/api/player");
     }
 
     public static void postAllPlayers (ServerWorld world) {
         HttpClient client = HttpClient.newHttpClient();
-        world.getPlayers(player -> !player.isSpectator()).forEach(player -> postPlayer(player, client));
+        world.getPlayers(player -> !player.isSpectator() && player.age % 100 == 0).forEach(player -> postPlayer(player, client));
         client.close();
     }
 
@@ -42,36 +46,58 @@ public abstract class Messenger {
         HttpRequest post = HttpRequest.newBuilder(URI.create(playerPost))
             .header("Content-type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(data.toJSON()))
+            .timeout(Duration.ofMillis(100))
             .build();
 
         client.sendAsync(post, HttpResponse.BodyHandlers.discarding());
     }
 
-    public static void postBlock (BlockData block) {
-        HttpClient client = HttpClient.newHttpClient();
+    public static void postBlock (BlockData block, HttpClient client) {
         HttpRequest post = HttpRequest.newBuilder(URI.create(blockPost))
             .header("Content-type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(block.toJSON()))
+            .timeout(Duration.ofMillis(1000))
             .build();
 
-        client.sendAsync(post, HttpResponse.BodyHandlers.discarding());
-        client.close();
+        try {
+            client.send(post, HttpResponse.BodyHandlers.discarding());
+        }
+        catch (Exception ignored) {
+
+        }
     }
 
-    public static void postBlock (BlockState blockState, BlockPos pos, World world) {
-        postBlock(BlockData.fromBlockState(blockState, pos, world.getDimensionEntry().getIdAsString()));
+    public static void postBlock (BlockState blockState, BlockPos pos, World world, HttpClient client) {
+        postBlock(BlockData.fromBlockState(blockState, pos, world), client);
     }
 
     public static void cacheBlockUpdate (BlockData block) {
         CACHE.add(block);
     }
 
+    public static void cacheBlockUpdates (Collection<BlockData> data) {
+        CACHE.addAll(data);
+    }
+
     public static void cacheBlockUpdate (BlockState blockState, BlockPos pos, World world) {
-        cacheBlockUpdate(BlockData.fromBlockState(blockState, pos, world.getDimensionEntry().getIdAsString()));
+        cacheBlockUpdate(BlockData.fromBlockState(blockState, pos, world));
     }
 
     public static void cacheChunk (World world, Chunk chunk) {
         CHUNK_CACHE.add(new CachedChunk(chunk.getPos(), world));
+    }
+
+    public static void clear () {
+        CACHE.clear();
+        CHUNK_CACHE.clear();
+    }
+
+    public static int cacheSize () {
+        return CACHE.size();
+    }
+
+    public static int chunkCacheSize () {
+        return CHUNK_CACHE.size();
     }
 
     public static void resolveChunkCache () {
@@ -79,30 +105,26 @@ public abstract class Messenger {
             CachedChunk cached = CHUNK_CACHE.poll();
             if (!cached.world.isChunkLoaded(cached.chunkPos.x, cached.chunkPos.z)) return;
 
+            List<BlockData> states = new ArrayList<>();
             for (int x = cached.chunkPos.getStartX(); x <= cached.chunkPos.getEndX(); ++x) {
                 for (int z = cached.chunkPos.getStartZ(); z <= cached.chunkPos.getEndZ(); ++z) {
                     BlockPos pos = cached.world.getTopPosition(Heightmap.Type.WORLD_SURFACE, new BlockPos(x, 0, z)).down();
                     states.add(BlockData.fromBlockState(cached.world.getBlockState(pos), pos, cached.world));
                 }
             }
+            cacheBlockUpdates(states);
         }
     }
 
-    public static void postFromCache (int posts) {
-        for (int i = 0; i < posts; ++i) {
-            if (!CACHE.isEmpty()) postBlock(CACHE.poll());
-        }
-    }
-
-    public static void postFromCache () {
-        postFromCache(1);
+    public static void postFromCache (HttpClient client) {
+        if (!CACHE.isEmpty()) postBlock(CACHE.poll(), client);
     }
 
     public record BlockData (int x, int y, int z, int colour, String dimension) {
         private static final Gson gson = new Gson();
 
-        public static BlockData fromBlockState (BlockState blockState, BlockPos pos, String dimension) {
-            return new BlockData(pos.getX(), pos.getY(), pos.getZ(), blockState.getBlock().getDefaultMapColor().color, dimension);
+        public static BlockData fromBlockState (BlockState blockState, BlockPos pos, World world) {
+            return new BlockData(pos.getX(), pos.getY(), pos.getZ(), blockState.getBlock().getDefaultMapColor().color, world.getDimensionEntry().getIdAsString());
         }
 
         public String toJSON () {
