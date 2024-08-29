@@ -81,8 +81,8 @@ public abstract class Messenger {
 
             for (int x = cached.chunkPos.getStartX(); x <= cached.chunkPos.getEndX(); ++x) {
                 for (int z = cached.chunkPos.getStartZ(); z <= cached.chunkPos.getEndZ(); ++z) {
-                    BlockPos pos = WorldUtil.getTopmostBlock(x, z, cached.world);
-                    cacheBlockUpdate(cached.world.getBlockState(pos), pos, cached.world);
+                    BlockPos pos = cached.world.getTopPosition(Heightmap.Type.WORLD_SURFACE, new BlockPos(x, 0, z)).down();
+                    states.add(BlockData.fromBlockState(cached.world.getBlockState(pos), pos, cached.world));
                 }
             }
         }

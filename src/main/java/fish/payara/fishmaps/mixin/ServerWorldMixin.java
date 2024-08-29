@@ -1,6 +1,5 @@
 package fish.payara.fishmaps.mixin;
 
-import fish.payara.fishmaps.WorldUtil;
 import fish.payara.fishmaps.messaging.Messenger;
 import net.minecraft.block.BlockState;
 import net.minecraft.registry.DynamicRegistryManager;
@@ -9,6 +8,7 @@ import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.profiler.Profiler;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.MutableWorldProperties;
 import net.minecraft.world.World;
 import net.minecraft.world.dimension.DimensionType;
@@ -27,7 +27,7 @@ public abstract class ServerWorldMixin extends World {
 
     @Inject(method="updateListeners", at=@At("TAIL"))
     private void updateREST (BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci) {
-        BlockPos topMost = WorldUtil.getTopmostBlock(pos.getX(), pos.getZ(), this);
-        Messenger.postBlock(this.getBlockState(topMost), topMost, this);
+        BlockPos topMost = this.getTopPosition(Heightmap.Type.WORLD_SURFACE, pos).down();
+        Messenger.cacheBlockUpdate(this.getBlockState(topMost), topMost, this);
     }
 }
