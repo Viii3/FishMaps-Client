@@ -24,15 +24,21 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public abstract class Messenger {
+    private static final String BLOCK_ADDRESS = "/api/map/block";
+    private static final String BLOCK_LIST_ADDRESS = "/api/map/block/multiple";
+    private static final String PLAYER_ADDRESS = "/api/player";
+
     private static final Queue<BlockData> CACHE = new ConcurrentLinkedQueue<>();
     private static final Queue<CachedChunk> CHUNK_CACHE = new LinkedList<>();
 
-    private static String blockPost = Settings.getAddress("/api/block");
-    private static String playerPost = Settings.getAddress("/api/player");
+    private static String blockPost = Settings.getAddress(BLOCK_ADDRESS);
+    private static String blockListPost = Settings.getAddress(BLOCK_LIST_ADDRESS);
+    private static String playerPost = Settings.getAddress(PLAYER_ADDRESS);
 
     public static void updateAddresses () {
-        blockPost = Settings.getAddress("/api/map/block");
-        playerPost = Settings.getAddress("/api/player");
+        blockPost = Settings.getAddress(BLOCK_ADDRESS);
+        blockListPost = Settings.getAddress(BLOCK_LIST_ADDRESS);
+        playerPost = Settings.getAddress(PLAYER_ADDRESS);
     }
 
     public static void postAllPlayers (ServerWorld world) {
@@ -67,8 +73,18 @@ public abstract class Messenger {
         }
     }
 
-    public static void postBlock (BlockState blockState, BlockPos pos, World world, HttpClient client) {
-        postBlock(BlockData.fromBlockState(blockState, pos, world), client);
+    public static void postBlock (List<BlockData> blocks, HttpClient client) {
+        HttpRequest post = HttpRequest.newBuilder(URI.create(blockListPost))
+            .header("Content-type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(BlockData.listJSON(blocks)))
+            .build();
+
+        try {
+            client.send(post, HttpResponse.BodyHandlers.discarding());
+        }
+        catch (Exception ignored) {
+
+        }
     }
 
     public static void cacheBlockUpdate (BlockData block) {
@@ -120,11 +136,23 @@ public abstract class Messenger {
         if (!CACHE.isEmpty()) postBlock(CACHE.poll(), client);
     }
 
+    public static void postFromCache (HttpClient client, int maxBlocks) {
+        List<BlockData> blocksToPost = new ArrayList<>();
+        for (int i = 0; i < maxBlocks && !CACHE.isEmpty(); ++i) {
+            blocksToPost.add(CACHE.poll());
+        }
+        postBlock(blocksToPost, client);
+    }
+
     public record BlockData (int x, int y, int z, int colour, String dimension) {
         private static final Gson gson = new Gson();
 
         public static BlockData fromBlockState (BlockState blockState, BlockPos pos, World world) {
             return new BlockData(pos.getX(), pos.getY(), pos.getZ(), blockState.getBlock().getDefaultMapColor().color, world.getDimensionEntry().getIdAsString());
+        }
+
+        public static String listJSON (List<BlockData> list) {
+            return gson.toJson(list);
         }
 
         public String toJSON () {

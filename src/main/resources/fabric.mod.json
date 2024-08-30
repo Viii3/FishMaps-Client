@@ -5,13 +5,13 @@
 	"name": "FishMaps",
 	"description": "Client application for the FishMaps Payara Server software.",
 	"authors": [
-		"Viii"
+		"Viii3"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/Viii3/FishMaps-Client",
+		"sources": "https://github.com/Viii3/FishMaps-Client"
 	},
-	"license": "CC0-1.0",
+	"license": "ARR",
 	"icon": "assets/fishmaps/icon.png",
 	"environment": "*",
 	"entrypoints": {
@@ -23,12 +23,9 @@
 		"fishmaps.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.15.11",
+		"fabricloader": ">=0.15.0",
 		"minecraft": "~1.21",
 		"java": ">=21",
 		"fabric-api": "*"
-	},
-	"suggests": {
-		"another-mod": "*"
 	}
 }

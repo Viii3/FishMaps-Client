@@ -15,7 +15,7 @@ public class HttpCaller implements Runnable {
 
         while (this.shouldContinue) {
             try {
-                Messenger.postFromCache(client);
+                Messenger.postFromCache(client, 256);
             }
             catch (Exception e) {
                 this.shouldContinue = false;
