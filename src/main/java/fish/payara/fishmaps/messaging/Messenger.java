@@ -77,6 +77,7 @@ public abstract class Messenger {
         HttpRequest post = HttpRequest.newBuilder(URI.create(blockListPost))
             .header("Content-type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(BlockData.listJSON(blocks)))
+            .timeout(Duration.ofMillis(4000))
             .build();
 
         try {
