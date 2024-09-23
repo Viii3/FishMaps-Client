@@ -6,7 +6,7 @@ This is a Minecraft server mod for Fabric feeds data about players and the world
 ## Usage
 The mod will cache all block updates and chunk loading in the world, and output blocks in groups of 256 to the web application.
 
-### Commands
+### In-Game Commands
 - `/blockCache`
   - Displays the number of blocks currently in the queue to be posted.
 - `/chunkCache`
