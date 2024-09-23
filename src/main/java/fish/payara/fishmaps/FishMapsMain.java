@@ -16,11 +16,10 @@ import org.slf4j.LoggerFactory;
 public class FishMapsMain implements ModInitializer {
 	public static final String MODID = "fishmaps";
     public static final Logger LOGGER = LoggerFactory.getLogger("FishMaps");
-	public static Thread callThread1;
-	public static Thread callThread2;
+	private static final int THREADS = 1; // WARNING: Increasing this value can overload the Payara Server!
 
-	private static final HttpCaller CALLER1 = new HttpCaller();
-	private static final HttpCaller CALLER2 = new HttpCaller();
+	public static Thread[] callThreads = new Thread[THREADS];
+	private static final HttpCaller[] callers = new HttpCaller[THREADS];
 
 	@Override
 	public void onInitialize () {
@@ -40,26 +39,26 @@ public class FishMapsMain implements ModInitializer {
 		});
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-			callThread1 = new Thread(null, CALLER1, "Http thread 1");
-			callThread1.start();
-			callThread2 = new Thread(null, CALLER2, "Http thread 2");
-			callThread2.start();
+			for (int i = 0; i < THREADS; ++i) {
+				callers[i] = new HttpCaller();
+				callThreads[i] = new Thread(null, callers[i], "Http thread " + i);
+				callThreads[i].start();
+			}
 		});
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-			stopCallThreads();
+			for (HttpCaller caller : callers) {
+				caller.stop();
+			}
+
+			for (Thread thread : callThreads) {
+				try {
+					thread.join();
+				}
+				catch (InterruptedException ignored) {
+
+				}
+			}
 			Messenger.clear();
 		});
-	}
-
-	public static void stopCallThreads () {
-		CALLER1.stop();
-		CALLER2.stop();
-		try {
-			callThread1.join();
-			callThread2.join();
-		}
-		catch (InterruptedException ignored) {
-
-		}
 	}
 }
