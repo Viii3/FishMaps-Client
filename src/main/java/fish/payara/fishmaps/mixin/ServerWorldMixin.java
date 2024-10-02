@@ -28,6 +28,8 @@ public abstract class ServerWorldMixin extends World {
     @Inject(method="updateListeners", at=@At("TAIL"))
     private void updateREST (BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci) {
         BlockPos topMost = this.getTopPosition(Heightmap.Type.WORLD_SURFACE, pos).down();
-        Messenger.cacheBlockUpdate(this.getBlockState(topMost), topMost, this);
+        if (topMost.getY() <= pos.getY()) { // TODO: Learn when the topmost actually updates.
+            Messenger.cacheBlockUpdate(this.getBlockState(topMost), topMost, this);
+        }
     }
 }
