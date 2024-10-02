@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 public class FishMapsMain implements ModInitializer {
     public static final String MODID = "fishmaps";
     public static final Logger LOGGER = LoggerFactory.getLogger("FishMaps");
-    private static final int THREADS = 1; // WARNING: Increasing this value can overload the Payara Server!
+    private static final int THREADS = 2;
 
     public static Thread[] callThreads = new Thread[THREADS];
     private static final HttpCaller[] callers = new HttpCaller[THREADS];
