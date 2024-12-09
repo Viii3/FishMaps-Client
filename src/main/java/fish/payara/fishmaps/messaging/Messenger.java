@@ -1,7 +1,9 @@
 package fish.payara.fishmaps.messaging;
 
-import com.google.gson.Gson;
 import fish.payara.fishmaps.config.Settings;
+import fish.payara.fishmaps.messaging.payload.BlockData;
+import fish.payara.fishmaps.messaging.payload.EventRequest;
+import fish.payara.fishmaps.messaging.payload.PlayerData;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -27,18 +29,22 @@ public abstract class Messenger {
     private static final String BLOCK_ADDRESS = "/api/map/block";
     private static final String BLOCK_LIST_ADDRESS = "/api/map/block/multiple";
     private static final String PLAYER_ADDRESS = "/api/player";
+    private static final String EVENT_ADDRESS = "/api/event";
 
     private static final Queue<BlockData> CACHE = new ConcurrentLinkedQueue<>();
     private static final Queue<CachedChunk> CHUNK_CACHE = new LinkedList<>();
+    private static final Queue<EventRequest> EVENT_CACHE = new ConcurrentLinkedQueue<>();
 
     private static String blockPost = Settings.getAddress(BLOCK_ADDRESS);
     private static String blockListPost = Settings.getAddress(BLOCK_LIST_ADDRESS);
     private static String playerPost = Settings.getAddress(PLAYER_ADDRESS);
+    private static String eventAddress = Settings.getAddress(EVENT_ADDRESS);
 
     public static void updateAddresses () {
         blockPost = Settings.getAddress(BLOCK_ADDRESS);
         blockListPost = Settings.getAddress(BLOCK_LIST_ADDRESS);
         playerPost = Settings.getAddress(PLAYER_ADDRESS);
+        eventAddress = Settings.getAddress(EVENT_ADDRESS);
     }
 
     public static void postAllPlayers (ServerWorld world) {
@@ -49,8 +55,7 @@ public abstract class Messenger {
 
     public static void postPlayer (PlayerEntity player, HttpClient client) {
         PlayerData data = PlayerData.fromPlayer(player);
-        HttpRequest post = HttpRequest.newBuilder(URI.create(playerPost))
-            .header("Content-type", "application/json")
+        HttpRequest post = Messenger.createRequest(playerPost)
             .POST(HttpRequest.BodyPublishers.ofString(data.toJSON()))
             .timeout(Duration.ofMillis(100))
             .build();
@@ -59,8 +64,7 @@ public abstract class Messenger {
     }
 
     public static void postBlock (BlockData block, HttpClient client) {
-        HttpRequest post = HttpRequest.newBuilder(URI.create(blockPost))
-            .header("Content-type", "application/json")
+        HttpRequest post = Messenger.createRequest(blockPost)
             .POST(HttpRequest.BodyPublishers.ofString(block.toJSON()))
             .timeout(Duration.ofMillis(1000))
             .build();
@@ -74,8 +78,7 @@ public abstract class Messenger {
     }
 
     public static void postBlock (List<BlockData> blocks, HttpClient client) {
-        HttpRequest post = HttpRequest.newBuilder(URI.create(blockListPost))
-            .header("Content-type", "application/json")
+        HttpRequest post = Messenger.createRequest(blockListPost)
             .POST(HttpRequest.BodyPublishers.ofString(BlockData.listJSON(blocks)))
             .timeout(Duration.ofMillis(4000))
             .build();
@@ -102,6 +105,10 @@ public abstract class Messenger {
 
     public static void cacheChunk (World world, Chunk chunk) {
         CHUNK_CACHE.add(new CachedChunk(chunk.getPos(), world));
+    }
+
+    public static void cacheEvent (EventRequest request) {
+        EVENT_CACHE.add(request);
     }
 
     public static void clear () {
@@ -145,32 +152,27 @@ public abstract class Messenger {
         postBlock(blocksToPost, client);
     }
 
-    public record BlockData (int x, int y, int z, int colour, String dimension) {
-        private static final Gson gson = new Gson();
+    public static void postFromEventCache (HttpClient client) {
+        if (!EVENT_CACHE.isEmpty()) {
+            EventRequest event = EVENT_CACHE.poll();
+            HttpRequest post = Messenger.createRequest(eventAddress)
+                .POST(HttpRequest.BodyPublishers.ofString(event.toJSON()))
+                .timeout(Duration.ofMillis(1000))
+                .build();
 
-        public static BlockData fromBlockState (BlockState blockState, BlockPos pos, World world) {
-            return new BlockData(pos.getX(), pos.getY(), pos.getZ(), blockState.getBlock().getDefaultMapColor().color, world.getDimensionEntry().getIdAsString());
-        }
+            try {
+                client.send(post, HttpResponse.BodyHandlers.discarding());
+            }
+            catch (Exception ignored) {
 
-        public static String listJSON (List<BlockData> list) {
-            return gson.toJson(list);
-        }
-
-        public String toJSON () {
-            return gson.toJson(this);
+            }
         }
     }
 
-    public record PlayerData (String name, int x, int z, String dimension) {
-        private static final Gson gson = new Gson();
-
-        public static PlayerData fromPlayer (PlayerEntity player) {
-            return new PlayerData(player.getName().getString(), player.getBlockX(), player.getBlockZ(), player.getWorld().getDimensionEntry().getIdAsString());
-        }
-
-        public String toJSON () {
-            return gson.toJson(this);
-        }
+    private static HttpRequest.Builder createRequest (String uri) {
+        return HttpRequest.newBuilder(URI.create(uri))
+            .header("Content-type", "application/json")
+            .header("Authorization", "Basic YWRtaW46YWRtaW4=");
     }
 
     record CachedChunk (ChunkPos chunkPos, World world) {

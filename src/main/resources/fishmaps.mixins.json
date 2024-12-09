@@ -3,6 +3,7 @@
   "package": "fish.payara.fishmaps.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "ServerPlayerEntityMixin",
     "ServerWorldMixin"
   ],
   "injectors": {
