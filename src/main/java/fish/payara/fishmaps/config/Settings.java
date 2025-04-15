@@ -1,6 +1,9 @@
 package fish.payara.fishmaps.config;
 
-import com.google.gson.stream.JsonReader;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import fish.payara.fishmaps.FishMapsMain;
 import fish.payara.fishmaps.messaging.Messenger;
 
@@ -11,24 +14,27 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class Settings {
-    private static final String SERVER_ADDRESS = "server_address";
+    private static final String KEY_SERVER_ADDRESS = "server_address";
+    private static final String KEY_BASIC_AUTH = "basic_auth";
+
     private static final String CONFIG_FILE = "config/fishmaps.json";
 
     private static String address = "http://localhost:8080/fishmaps";
+    private static String auth = "Basic ZmlzaG1hcHNfYWRtaW46ZmlzaG1hcHM=";
 
     public static void read () {
         try {
-            FileReader fileReader = new FileReader(CONFIG_FILE);
-            JsonReader jsonReader = new JsonReader(fileReader);
+            JsonElement element = JsonParser.parseReader(new FileReader(CONFIG_FILE));
+            if (element instanceof JsonObject json) {
+                if (json.has(KEY_SERVER_ADDRESS)) {
+                    address = json.getAsJsonPrimitive(KEY_SERVER_ADDRESS).getAsString();
+                }
 
-            jsonReader.beginObject();
-            while (jsonReader.hasNext()) {
-                String name = jsonReader.nextName();
-                if (SERVER_ADDRESS.equals(name)) {
-                    address = jsonReader.nextString();
-                    break;
+                if (json.has(KEY_BASIC_AUTH)) {
+                    auth = json.getAsJsonPrimitive(KEY_BASIC_AUTH).getAsString();
                 }
             }
+            write();
         }
         catch (FileNotFoundException e) {
             FishMapsMain.LOGGER.info("Could not find FishMaps config file, creating one now.");
@@ -48,15 +54,12 @@ public class Settings {
     }
 
     public static void write () {
-        StringBuilder jsonBuilder = new StringBuilder();
-        jsonBuilder.append("{\n")
-            .append("\t\"").append(SERVER_ADDRESS).append("\": \"").append(address).append("\"")
-            .append("\n}");
+        JsonObject json = new JsonObject();
+        json.addProperty(KEY_SERVER_ADDRESS, address);
+        json.addProperty(KEY_BASIC_AUTH, auth);
 
-        try {
-            FileWriter writer = new FileWriter(CONFIG_FILE);
-            writer.write(jsonBuilder.toString());
-            writer.close();
+        try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
+            writer.write(new GsonBuilder().setPrettyPrinting().create().toJson(json));
         }
         catch (IOException e) {
             FishMapsMain.LOGGER.error("Error occurred whilst writing FishMaps config file: ", e);
@@ -69,5 +72,9 @@ public class Settings {
 
     public static String getAddress (String path) {
         return address + path;
+    }
+
+    public static String getAuthentication () {
+        return auth;
     }
 }

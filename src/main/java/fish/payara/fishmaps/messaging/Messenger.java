@@ -172,7 +172,7 @@ public abstract class Messenger {
     private static HttpRequest.Builder createRequest (String uri) {
         return HttpRequest.newBuilder(URI.create(uri))
             .header("Content-type", "application/json")
-            .header("Authorization", "Basic YWRtaW46YWRtaW4=");
+            .header("Authorization", Settings.getAuthentication());
     }
 
     record CachedChunk (ChunkPos chunkPos, World world) {
